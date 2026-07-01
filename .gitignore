@@ -1,0 +1,10 @@
+build/
+.DS_Store
+*.sofa
+*.sw[op]
+.cache/
+compile_commands.json
+CMakeUserPresets.json
+/data/hrir/*.sofa
+hrtf/
+.gstack/

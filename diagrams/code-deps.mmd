@@ -1,0 +1,39 @@
+graph LR
+    MAIN["main.cpp\nCLI entry"]
+    PA["portaudio_backend\n.h/.cpp"]
+    NUOLS["nuols_engine\n.h/.cpp"]
+    FDL["fdl\n.h/.cpp"]
+    EQ["biquad_chain\n.h/.cpp"]
+    SOFA["sofa_loader\n.h/.cpp"]
+    TYPES["types.h\nChannel, AudioConfig\nSpeakerPosition"]
+
+    VDSP["Apple vDSP\nAccelerate.framework"]
+    PORTAUDIO["PortAudio\nlibportaudio"]
+    MYSOFA["libmysofa\nSOFA parser"]
+
+    MAIN --> PA
+    MAIN --> NUOLS
+    MAIN --> EQ
+    MAIN --> SOFA
+    MAIN --> TYPES
+
+    PA --> NUOLS
+    PA --> EQ
+    PA --> TYPES
+    PA --> PORTAUDIO
+
+    NUOLS --> FDL
+    NUOLS --> TYPES
+
+    FDL --> VDSP
+    FDL --> TYPES
+
+    EQ --> VDSP
+
+    SOFA --> MYSOFA
+    SOFA --> TYPES
+
+    style VDSP fill:#1d3557,stroke:#457b9d,color:#fff
+    style PORTAUDIO fill:#1d3557,stroke:#457b9d,color:#fff
+    style MYSOFA fill:#1d3557,stroke:#457b9d,color:#fff
+    style TYPES fill:#2d6a4f,stroke:#52b788,color:#fff

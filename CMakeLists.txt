@@ -1,0 +1,92 @@
+cmake_minimum_required(VERSION 3.20)
+project(hearGOD VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Apple frameworks
+find_library(ACCELERATE_FRAMEWORK   Accelerate    REQUIRED)
+find_library(COREAUDIO_FRAMEWORK    CoreAudio     REQUIRED)
+find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox  REQUIRED)
+find_library(AUDIOUNIT_FRAMEWORK    AudioUnit     REQUIRED)
+find_library(COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+find_library(CORESERVICES_FRAMEWORK CoreServices  REQUIRED)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
+pkg_check_modules(MYSOFA    REQUIRED libmysofa)
+
+set(COMMON_COMPILE_OPTIONS -O3 -ffast-math -march=native)
+
+# --------------------------------------------------------------------------
+# hearGOD_core — everything except main.cpp, linkable by tests
+# --------------------------------------------------------------------------
+set(CORE_SOURCES
+    src/core/nuols_engine.cpp
+    src/core/fdl.cpp
+    src/core/dfe_compensator.cpp
+    src/audio/channel_router.cpp
+    src/audio/portaudio_backend.cpp
+    src/io/sofa_loader.cpp
+    src/eq/biquad_chain.cpp
+    src/eq/peq_parser.cpp
+    src/config/config_file.cpp
+)
+
+add_library(hearGOD_core STATIC ${CORE_SOURCES})
+
+target_include_directories(hearGOD_core PUBLIC
+    include
+    ${PORTAUDIO_INCLUDE_DIRS}
+    ${MYSOFA_INCLUDE_DIRS}
+)
+
+target_link_libraries(hearGOD_core
+    ${ACCELERATE_FRAMEWORK}
+    ${COREAUDIO_FRAMEWORK}
+    ${AUDIOTOOLBOX_FRAMEWORK}
+    ${AUDIOUNIT_FRAMEWORK}
+    ${COREFOUNDATION_FRAMEWORK}
+    ${CORESERVICES_FRAMEWORK}
+    ${PORTAUDIO_LINK_LIBRARIES}
+    ${MYSOFA_LINK_LIBRARIES}
+)
+
+target_compile_options(hearGOD_core PRIVATE ${COMMON_COMPILE_OPTIONS})
+
+# --------------------------------------------------------------------------
+# hearGOD — main executable
+# --------------------------------------------------------------------------
+add_executable(hearGOD src/main.cpp)
+target_link_libraries(hearGOD hearGOD_core)
+target_compile_options(hearGOD PRIVATE ${COMMON_COMPILE_OPTIONS})
+
+# --------------------------------------------------------------------------
+# Tests
+# --------------------------------------------------------------------------
+# Install
+include(GNUInstallDirs)
+install(TARGETS hearGOD RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+enable_testing()
+find_package(GTest REQUIRED)
+
+set(TEST_SOURCES
+    tests/test_fdl.cpp
+    tests/test_biquad.cpp
+    tests/test_sofa.cpp
+    tests/test_peq.cpp
+    tests/test_integration.cpp
+)
+
+add_executable(hearGOD_tests ${TEST_SOURCES})
+
+target_link_libraries(hearGOD_tests
+    hearGOD_core
+    GTest::gtest_main
+)
+
+target_compile_options(hearGOD_tests PRIVATE ${COMMON_COMPILE_OPTIONS})
+
+include(GoogleTest)
+gtest_discover_tests(hearGOD_tests)

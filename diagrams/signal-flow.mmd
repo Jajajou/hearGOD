@@ -1,0 +1,33 @@
+graph TD
+    SRC["🎬 Video / MKV Source"]
+    BH["BlackHole 16ch\nvirtual audio device"]
+    PA_IN["PortAudio\ninput callback"]
+
+    subgraph NUOLS["NUOLSEngine — per channel FDL pair"]
+        FL_FDL["FL → FDL L + R"]
+        FR_FDL["FR → FDL L + R"]
+        FC_FDL["FC → FDL L + R"]
+        SL_FDL["SL → FDL L + R"]
+        SR_FDL["SR → FDL L + R"]
+        BL_FDL["BL → FDL L + R"]
+        BR_FDL["BR → FDL L + R"]
+    end
+
+    LFE["LFE channel"]
+    LPF["Butterworth LPF\n120 Hz order 4"]
+    SUM["Σ Sum → Stereo\nL + R binaural"]
+    EQ["BiquadChain EQ\ntarget curve IIR"]
+    PA_OUT["PortAudio\noutput"]
+    IEM["🎧 IEM / Headphone"]
+
+    SRC --> BH --> PA_IN
+    PA_IN --> FL_FDL & FR_FDL & FC_FDL & SL_FDL & SR_FDL & BL_FDL & BR_FDL
+    PA_IN --> LFE --> LPF
+    FL_FDL & FR_FDL & FC_FDL & SL_FDL & SR_FDL & BL_FDL & BR_FDL --> SUM
+    LPF --> SUM
+    SUM --> EQ --> PA_OUT --> IEM
+
+    style NUOLS fill:#1a1a2e,stroke:#4a9eff,color:#fff
+    style SUM fill:#16213e,stroke:#4a9eff,color:#fff
+    style EQ fill:#0f3460,stroke:#4a9eff,color:#fff
+    style LPF fill:#533483,stroke:#e94560,color:#fff
