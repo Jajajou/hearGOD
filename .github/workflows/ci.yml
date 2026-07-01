@@ -17,7 +17,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install portaudio libmysofa googletest pkg-config
+          brew install portaudio googletest pkg-config cmake
+
+      - name: Build libmysofa from source
+        run: |
+          git clone --depth 1 https://github.com/hoene/libmysofa.git /tmp/libmysofa
+          cmake -B /tmp/libmysofa/build -S /tmp/libmysofa \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX=/usr/local
+          cmake --build /tmp/libmysofa/build --parallel
+          sudo cmake --install /tmp/libmysofa/build
 
       - name: Configure
         run: |
