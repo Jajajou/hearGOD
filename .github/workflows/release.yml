@@ -85,22 +85,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME}"
+          cat > /tmp/release-notes.md << 'NOTES'
+          ## hearGOD RELEASE_VERSION
+
+          Unsigned DMG — Apple Silicon (M1+) only.
+
+          ### Install
+          1. Download the `.dmg` file below
+          2. Open DMG → drag hearGOD.app to Applications
+          3. Right-click → Open (bypass Gatekeeper on first launch)
+
+          ### Requirements
+          - macOS 13.0+
+          - Apple Silicon (M1 or later)
+          - [BlackHole 16ch](https://existential.audio/blackhole/)
+
+          ### Bundled HRIR
+          FABIAN HRIR dataset included — no separate download needed.
+          NOTES
+          sed -i '' "s/RELEASE_VERSION/${VERSION}/" /tmp/release-notes.md
           gh release create "${VERSION}" \
             --title "hearGOD ${VERSION}" \
-            --notes "## hearGOD ${VERSION}
-
-Unsigned DMG — Apple Silicon (M1+) only.
-
-### Install
-1. Download \`hearGOD-${VERSION}.dmg\`
-2. Open DMG → drag hearGOD.app to Applications
-3. Right-click → Open (bypass Gatekeeper on first launch)
-
-### Requirements
-- macOS 13.0+
-- Apple Silicon (M1 or later)
-- [BlackHole 16ch](https://existential.audio/blackhole/)
-
-### Bundled HRIR
-FABIAN HRIR dataset included — no separate download needed." \
+            --notes-file /tmp/release-notes.md \
             "hearGOD-${VERSION}.dmg"
