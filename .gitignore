@@ -1,4 +1,5 @@
 build/
+build_juce/
 .DS_Store
 *.sofa
 *.sw[op]
