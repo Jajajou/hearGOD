@@ -67,13 +67,24 @@ void MainComponent::setupControls()
 
     // EQ profile combo
     eqProfileCombo_.setTextWhenNothingSelected("No EQ preset");
+    eqProfileCombo_.setEditableText(true);
     eqProfileCombo_.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xFF1C1C23));
     eqProfileCombo_.setColour(juce::ComboBox::textColourId,       juce::Colour(0xFFE4E4E7));
     eqProfileCombo_.setColour(juce::ComboBox::outlineColourId,    juce::Colour(0xFF2A2A35));
     eqProfileCombo_.setColour(juce::ComboBox::arrowColourId,      juce::Colour(0xFF71717A));
     eqProfileCombo_.onChange = [this] {
         const int idx = eqProfileCombo_.getSelectedItemIndex();
-        if (idx >= 0) selectEQProfile(idx);
+        if (idx >= 0) {
+            // Rename if text was edited
+            const juce::String newName = eqProfileCombo_.getText().trim();
+            if (newName.isNotEmpty() && newName != eqProfiles_[idx].name) {
+                eqProfiles_.getReference(idx).name = newName;
+                eqProfileCombo_.changeItemText(idx + 1, newName);
+                saveProfiles();
+                logPanel_.log("Profile renamed: " + newName);
+            }
+            selectEQProfile(idx);
+        }
     };
     addAndMakeVisible(eqProfileCombo_);
 
