@@ -53,7 +53,7 @@ jobs:
       - name: Download FABIAN HRIR
         run: |
           SOFA_URL="https://sofacoustics.org/data/database/fabian/FABIAN_HRIR_measured_HATO_0.sofa"
-          SOFA_SHA256="e4f4efda1bb2e18fa6f8aab2e0bca86d95f3eb8e3cfdf9ad1c3e37ac50618e58"
+          SOFA_SHA256="83ebbcd9a09d17679b95d201c9775438c0bb1199d565c3fc7a25448a905cdc3c"
           curl -L -o /tmp/FABIAN.sofa "$SOFA_URL"
           echo "$SOFA_SHA256  /tmp/FABIAN.sofa" | shasum -a 256 -c -
 
