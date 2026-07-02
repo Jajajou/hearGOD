@@ -814,6 +814,10 @@ void MainComponent::loadRawFR(const juce::File& f)
     lastRawFRPath_ = f.getFullPathName();
     eqGraph_.setRawFR(std::move(pts));
     logPanel_.log("Raw FR loaded: " + f.getFileName());
+    if (props_) {
+        props_->setValue("rawFRPath", lastRawFRPath_);
+        props_->saveIfNeeded();
+    }
 }
 
 void MainComponent::loadTargetCurve(const juce::File& f)
@@ -827,6 +831,10 @@ void MainComponent::loadTargetCurve(const juce::File& f)
     lastTargetPath_ = f.getFullPathName();
     eqGraph_.setTargetCurve(std::move(pts));
     logPanel_.log("Target loaded: " + f.getFileName());
+    if (props_) {
+        props_->setValue("targetPath", lastTargetPath_);
+        props_->saveIfNeeded();
+    }
 }
 
 } // namespace hearGOD
