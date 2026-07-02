@@ -44,6 +44,7 @@ jobs:
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+            -DBUILD_TESTING=OFF \
             -DPORTAUDIO_STATIC_LIB=/tmp/portaudio-install/lib/libportaudio.a \
             -DMYSOFA_STATIC_LIB=/tmp/mysofa-install/lib/libmysofa.a
 

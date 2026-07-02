@@ -103,28 +103,30 @@ target_compile_options(hearGOD PRIVATE ${COMMON_COMPILE_OPTIONS})
 include(GNUInstallDirs)
 install(TARGETS hearGOD RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-enable_testing()
-find_package(GTest REQUIRED)
+if(BUILD_TESTING)
+    enable_testing()
+    find_package(GTest REQUIRED)
 
-set(TEST_SOURCES
-    tests/test_fdl.cpp
-    tests/test_biquad.cpp
-    tests/test_sofa.cpp
-    tests/test_peq.cpp
-    tests/test_integration.cpp
-)
+    set(TEST_SOURCES
+        tests/test_fdl.cpp
+        tests/test_biquad.cpp
+        tests/test_sofa.cpp
+        tests/test_peq.cpp
+        tests/test_integration.cpp
+    )
 
-add_executable(hearGOD_tests ${TEST_SOURCES})
+    add_executable(hearGOD_tests ${TEST_SOURCES})
 
-target_link_libraries(hearGOD_tests
-    hearGOD_core
-    GTest::gtest_main
-)
+    target_link_libraries(hearGOD_tests
+        hearGOD_core
+        GTest::gtest_main
+    )
 
-target_compile_options(hearGOD_tests PRIVATE ${COMMON_COMPILE_OPTIONS})
+    target_compile_options(hearGOD_tests PRIVATE ${COMMON_COMPILE_OPTIONS})
 
-include(GoogleTest)
-gtest_discover_tests(hearGOD_tests)
+    include(GoogleTest)
+    gtest_discover_tests(hearGOD_tests)
+endif()
 
 # --------------------------------------------------------------------------
 # hearGOD_app — JUCE GUI application
