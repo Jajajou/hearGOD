@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
-project(hearGOD VERSION 0.1.0 LANGUAGES CXX)
+project(hearGOD VERSION 0.1.0 LANGUAGES C CXX)
+
+include(FetchContent)
+FetchContent_Declare(
+    JUCE
+    GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+    GIT_TAG        8.0.3
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(JUCE)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -90,3 +99,48 @@ target_compile_options(hearGOD_tests PRIVATE ${COMMON_COMPILE_OPTIONS})
 
 include(GoogleTest)
 gtest_discover_tests(hearGOD_tests)
+
+# --------------------------------------------------------------------------
+# hearGOD_app — JUCE GUI application
+# --------------------------------------------------------------------------
+juce_add_gui_app(hearGOD_app
+    PRODUCT_NAME    "hearGOD"
+    VERSION         "0.1.0"
+    BUNDLE_ID       "com.heargod.app"
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT    "hearGOD needs microphone access to read audio input."
+)
+
+target_sources(hearGOD_app PRIVATE
+    src/gui/main_juce.cpp
+    src/gui/MainWindow.cpp
+    src/gui/MainComponent.cpp
+    src/gui/HearGodAudioProcessor.cpp
+    src/gui/EQGraph.cpp
+    src/gui/MultiChannelMeter.cpp
+    src/gui/HRIRPanel.cpp
+    src/gui/LogPanel.cpp
+    src/gui/SystemAudioSwitch.cpp
+)
+
+target_compile_definitions(hearGOD_app PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:hearGOD_app,JUCE_PRODUCT_NAME>"
+    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:hearGOD_app,JUCE_VERSION>"
+)
+
+target_link_libraries(hearGOD_app PRIVATE
+    hearGOD_core
+    juce::juce_audio_basics
+    juce::juce_audio_devices
+    juce::juce_audio_utils
+    juce::juce_graphics
+    juce::juce_gui_basics
+    juce::juce_gui_extra
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags
+    "-framework CoreAudio"
+)
+
+target_compile_options(hearGOD_app PRIVATE ${COMMON_COMPILE_OPTIONS})
