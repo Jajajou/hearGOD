@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-dmg:
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build tools
+        run: |
+          brew install cmake pkg-config hdf5 create-dmg
+
+      - name: Build libmysofa from source (static)
+        run: |
+          git clone --depth 1 https://github.com/hoene/libmysofa.git /tmp/libmysofa
+          cmake -B /tmp/libmysofa/build -S /tmp/libmysofa \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=OFF \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_INSTALL_PREFIX=/tmp/mysofa-install
+          cmake --build /tmp/libmysofa/build --parallel
+          cmake --install /tmp/libmysofa/build
+
+      - name: Build PortAudio from source (static)
+        run: |
+          git clone --depth 1 https://github.com/PortAudio/portaudio.git /tmp/portaudio
+          cmake -B /tmp/portaudio/build -S /tmp/portaudio \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_INSTALL_PREFIX=/tmp/portaudio-install
+          cmake --build /tmp/portaudio/build --parallel
+          cmake --install /tmp/portaudio/build
+
+      - name: Configure hearGOD
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+            -DPORTAUDIO_STATIC_LIB=/tmp/portaudio-install/lib/libportaudio.a \
+            -DMYSOFA_STATIC_LIB=/tmp/mysofa-install/lib/libmysofa.a
+
+      - name: Build hearGOD
+        run: cmake --build build --parallel
+
+      - name: Download FABIAN HRIR
+        run: |
+          SOFA_URL="https://sofacoustics.org/data/database/fabian/FABIAN_HRIR_measured_HATO_0.sofa"
+          SOFA_SHA256="e4f4efda1bb2e18fa6f8aab2e0bca86d95f3eb8e3cfdf9ad1c3e37ac50618e58"
+          curl -L -o /tmp/FABIAN.sofa "$SOFA_URL"
+          echo "$SOFA_SHA256  /tmp/FABIAN.sofa" | shasum -a 256 -c -
+
+      - name: Bundle SOFA into app
+        run: |
+          APP="build/hearGOD_app_artefacts/Release/hearGOD.app"
+          mkdir -p "$APP/Contents/Resources/hrir"
+          cp /tmp/FABIAN.sofa "$APP/Contents/Resources/hrir/FABIAN.sofa"
+
+      - name: Ad-hoc codesign
+        run: |
+          APP="build/hearGOD_app_artefacts/Release/hearGOD.app"
+          codesign -s - --deep --force "$APP"
+
+      - name: Create DMG
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          create-dmg \
+            --volname "hearGOD ${VERSION}" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --app-drop-link 600 185 \
+            "hearGOD-${VERSION}.dmg" \
+            "build/hearGOD_app_artefacts/Release/hearGOD.app"
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          gh release create "${VERSION}" \
+            --title "hearGOD ${VERSION}" \
+            --notes "## hearGOD ${VERSION}
+
+Unsigned DMG — Apple Silicon (M1+) only.
+
+### Install
+1. Download \`hearGOD-${VERSION}.dmg\`
+2. Open DMG → drag hearGOD.app to Applications
+3. Right-click → Open (bypass Gatekeeper on first launch)
+
+### Requirements
+- macOS 13.0+
+- Apple Silicon (M1 or later)
+- [BlackHole 16ch](https://existential.audio/blackhole/)
+
+### Bundled HRIR
+FABIAN HRIR dataset included — no separate download needed." \
+            "hearGOD-${VERSION}.dmg"

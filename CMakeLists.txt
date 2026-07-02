@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(hearGOD VERSION 0.1.0 LANGUAGES C CXX)
+project(hearGOD VERSION 0.3.0 LANGUAGES C CXX)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -22,8 +22,18 @@ find_library(COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
 find_library(CORESERVICES_FRAMEWORK CoreServices  REQUIRED)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
-pkg_check_modules(MYSOFA    REQUIRED libmysofa)
+
+# Static lib paths can be passed by CI: -DPORTAUDIO_STATIC_LIB=<path> -DMYSOFA_STATIC_LIB=<path>
+# Local dev leaves these unset and falls back to pkg-config (Homebrew dynamic).
+option(PORTAUDIO_STATIC_LIB "Path to static libportaudio.a" "")
+option(MYSOFA_STATIC_LIB    "Path to static libmysofa.a"    "")
+
+if(NOT PORTAUDIO_STATIC_LIB)
+    pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
+endif()
+if(NOT MYSOFA_STATIC_LIB)
+    pkg_check_modules(MYSOFA REQUIRED libmysofa)
+endif()
 
 set(COMMON_COMPILE_OPTIONS -O3 -ffast-math -march=native)
 
@@ -44,10 +54,26 @@ set(CORE_SOURCES
 
 add_library(hearGOD_core STATIC ${CORE_SOURCES})
 
+if(PORTAUDIO_STATIC_LIB)
+    set(_PORTAUDIO_INC "/usr/local/include")
+    set(_PORTAUDIO_LIB "${PORTAUDIO_STATIC_LIB}")
+else()
+    set(_PORTAUDIO_INC "${PORTAUDIO_INCLUDE_DIRS}")
+    set(_PORTAUDIO_LIB "${PORTAUDIO_LINK_LIBRARIES}")
+endif()
+
+if(MYSOFA_STATIC_LIB)
+    set(_MYSOFA_INC "/usr/local/include")
+    set(_MYSOFA_LIB "${MYSOFA_STATIC_LIB}")
+else()
+    set(_MYSOFA_INC "${MYSOFA_INCLUDE_DIRS}")
+    set(_MYSOFA_LIB "${MYSOFA_LINK_LIBRARIES}")
+endif()
+
 target_include_directories(hearGOD_core PUBLIC
     include
-    ${PORTAUDIO_INCLUDE_DIRS}
-    ${MYSOFA_INCLUDE_DIRS}
+    ${_PORTAUDIO_INC}
+    ${_MYSOFA_INC}
 )
 
 target_link_libraries(hearGOD_core
@@ -57,8 +83,8 @@ target_link_libraries(hearGOD_core
     ${AUDIOUNIT_FRAMEWORK}
     ${COREFOUNDATION_FRAMEWORK}
     ${CORESERVICES_FRAMEWORK}
-    ${PORTAUDIO_LINK_LIBRARIES}
-    ${MYSOFA_LINK_LIBRARIES}
+    ${_PORTAUDIO_LIB}
+    ${_MYSOFA_LIB}
 )
 
 target_compile_options(hearGOD_core PRIVATE ${COMMON_COMPILE_OPTIONS})
@@ -105,7 +131,7 @@ gtest_discover_tests(hearGOD_tests)
 # --------------------------------------------------------------------------
 juce_add_gui_app(hearGOD_app
     PRODUCT_NAME    "hearGOD"
-    VERSION         "0.1.0"
+    VERSION         "${PROJECT_VERSION}"
     BUNDLE_ID       "com.heargod.app"
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT    "hearGOD needs microphone access to read audio input."

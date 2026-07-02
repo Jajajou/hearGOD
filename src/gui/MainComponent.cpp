@@ -101,6 +101,13 @@ void MainComponent::setupControls()
     eqRemoveProfileBtn_.onClick = [this] { removeActiveEQProfile(); };
     addAndMakeVisible(eqRemoveProfileBtn_);
 
+    // Save current state into active profile
+    eqSaveProfileBtn_.setButtonText("Save");
+    eqSaveProfileBtn_.setColour(juce::TextButton::buttonColourId,  juce::Colour(kElevated));
+    eqSaveProfileBtn_.setColour(juce::TextButton::textColourOffId, juce::Colour(kAccent));
+    eqSaveProfileBtn_.onClick = [this] { saveActiveProfile(); };
+    addAndMakeVisible(eqSaveProfileBtn_);
+
     eqBrowseBtn_.setButtonText("Load EQ...");
     eqBrowseBtn_.setColour(juce::TextButton::buttonColourId,  juce::Colour(kElevated));
     eqBrowseBtn_.setColour(juce::TextButton::textColourOffId, juce::Colour(kText));
@@ -497,7 +504,7 @@ void MainComponent::resized()
     // Centre: EQ controls + graph
     auto c = centre.reduced(8);
 
-    // Row 1: profile combo + add/remove + Raw FR + Target + Load EQ
+    // Row 1: profile combo + add/remove/save + Raw FR + Target + Load EQ
     auto row1 = c.removeFromTop(26);
     eqBrowseBtn_.setBounds(row1.removeFromRight(84));
     row1.removeFromRight(4);
@@ -505,6 +512,8 @@ void MainComponent::resized()
     row1.removeFromRight(4);
     rawFRBtn_.setBounds(row1.removeFromRight(72));
     row1.removeFromRight(4);
+    eqSaveProfileBtn_.setBounds(row1.removeFromRight(44));
+    row1.removeFromRight(2);
     eqRemoveProfileBtn_.setBounds(row1.removeFromRight(24));
     row1.removeFromRight(2);
     eqAddProfileBtn_.setBounds(row1.removeFromRight(24));
@@ -684,16 +693,16 @@ void MainComponent::restoreState()
 void MainComponent::addEQProfile(const juce::File& f)
 {
     EQProfile p;
-    p.name = f.getFileNameWithoutExtension();
-    p.path = f.getFullPathName();
+    p.name        = f.getFileNameWithoutExtension();
+    p.path        = f.getFullPathName();
+    p.rawFRPath   = lastRawFRPath_;
+    p.targetPath  = lastTargetPath_;
+    p.rawFROffset = (float)rawFROffsetSlider_.getValue();
+    p.normFreqIdx = normFreqCombo_.getSelectedId();
 
     // Avoid duplicates by path
-    for (const auto& existing : eqProfiles_)
-        if (existing.path == p.path) {
-            // Just select it
-            for (int i = 0; i < eqProfiles_.size(); ++i)
-                if (eqProfiles_[i].path == p.path) { selectEQProfile(i); return; }
-        }
+    for (int i = 0; i < eqProfiles_.size(); ++i)
+        if (eqProfiles_[i].path == p.path) { selectEQProfile(i); return; }
 
     eqProfiles_.add(p);
     const int newIdx = eqProfiles_.size() - 1;
@@ -728,17 +737,42 @@ void MainComponent::selectEQProfile(int idx)
 {
     if (idx < 0 || idx >= eqProfiles_.size()) return;
     activeProfileIdx_ = idx;
+    const auto& p = eqProfiles_[idx];
 
-    const juce::File f(eqProfiles_[idx].path);
-    if (f.existsAsFile()) {
-        loadEQ(f);
-    } else {
-        eqStatusLabel_.setText("File not found: " + eqProfiles_[idx].name,
-                               juce::dontSendNotification);
-        eqStatusLabel_.setColour(juce::Label::textColourId, juce::Colour(kRed));
-        logPanel_.log("EQ profile file missing: " + eqProfiles_[idx].path,
-                      LogPanel::Level::Warn);
+    // Restore EQ
+    if (p.path.isNotEmpty()) {
+        const juce::File f(p.path);
+        if (f.existsAsFile()) {
+            loadEQ(f);
+        } else {
+            eqStatusLabel_.setText("File not found: " + p.name,
+                                   juce::dontSendNotification);
+            eqStatusLabel_.setColour(juce::Label::textColourId, juce::Colour(kRed));
+            logPanel_.log("EQ profile file missing: " + p.path, LogPanel::Level::Warn);
+        }
     }
+
+    // Restore raw FR
+    eqGraph_.clearRawFR();
+    lastRawFRPath_ = {};
+    if (p.rawFRPath.isNotEmpty()) {
+        const juce::File f(p.rawFRPath);
+        if (f.existsAsFile()) loadRawFR(f);
+    }
+
+    // Restore target
+    eqGraph_.clearTargetCurve();
+    lastTargetPath_ = {};
+    if (p.targetPath.isNotEmpty()) {
+        const juce::File f(p.targetPath);
+        if (f.existsAsFile()) loadTargetCurve(f);
+    }
+
+    // Restore norm freq + offset
+    if (p.normFreqIdx >= 1 && p.normFreqIdx <= 6) {
+        normFreqCombo_.setSelectedId(p.normFreqIdx, juce::sendNotification);
+    }
+    rawFROffsetSlider_.setValue(p.rawFROffset, juce::sendNotification);
 }
 
 void MainComponent::saveProfiles()
@@ -746,10 +780,27 @@ void MainComponent::saveProfiles()
     if (!props_) return;
     props_->setValue("eqProfileCount", eqProfiles_.size());
     for (int i = 0; i < eqProfiles_.size(); ++i) {
-        props_->setValue("eqProfile_" + juce::String(i) + "_name", eqProfiles_[i].name);
-        props_->setValue("eqProfile_" + juce::String(i) + "_path", eqProfiles_[i].path);
+        const auto pre = "eqProfile_" + juce::String(i) + "_";
+        props_->setValue(pre + "name",        eqProfiles_[i].name);
+        props_->setValue(pre + "path",        eqProfiles_[i].path);
+        props_->setValue(pre + "rawFRPath",   eqProfiles_[i].rawFRPath);
+        props_->setValue(pre + "targetPath",  eqProfiles_[i].targetPath);
+        props_->setValue(pre + "rawFROffset", (double)eqProfiles_[i].rawFROffset);
+        props_->setValue(pre + "normFreqIdx", eqProfiles_[i].normFreqIdx);
     }
     props_->saveIfNeeded();
+}
+
+void MainComponent::saveActiveProfile()
+{
+    if (activeProfileIdx_ < 0 || activeProfileIdx_ >= eqProfiles_.size()) return;
+    auto& p       = eqProfiles_.getReference(activeProfileIdx_);
+    p.rawFRPath   = lastRawFRPath_;
+    p.targetPath  = lastTargetPath_;
+    p.rawFROffset = (float)rawFROffsetSlider_.getValue();
+    p.normFreqIdx = normFreqCombo_.getSelectedId();
+    saveProfiles();
+    logPanel_.log("Profile saved: " + p.name);
 }
 
 void MainComponent::restoreProfiles()
@@ -757,10 +808,15 @@ void MainComponent::restoreProfiles()
     if (!props_) return;
     const int count = props_->getIntValue("eqProfileCount", 0);
     for (int i = 0; i < count; ++i) {
+        const auto pre = "eqProfile_" + juce::String(i) + "_";
         EQProfile p;
-        p.name = props_->getValue("eqProfile_" + juce::String(i) + "_name");
-        p.path = props_->getValue("eqProfile_" + juce::String(i) + "_path");
-        if (p.name.isNotEmpty() && p.path.isNotEmpty()) {
+        p.name        = props_->getValue(pre + "name");
+        p.path        = props_->getValue(pre + "path");
+        p.rawFRPath   = props_->getValue(pre + "rawFRPath");
+        p.targetPath  = props_->getValue(pre + "targetPath");
+        p.rawFROffset = (float)props_->getDoubleValue(pre + "rawFROffset", 0.0);
+        p.normFreqIdx = props_->getIntValue(pre + "normFreqIdx", 4);
+        if (p.name.isNotEmpty()) {
             eqProfiles_.add(p);
             eqProfileCombo_.addItem(p.name, i + 1);
         }

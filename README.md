@@ -2,6 +2,12 @@
 
 Real-time binaural renderer for macOS. Replaces matrix downmix with HRIR convolution using any SOFA-format dataset.
 
+## Download
+
+**[hearGOD v0.3.0 — DMG](https://github.com/jajajou1778/hearGOD/releases/latest)**
+
+Requires Apple Silicon (M1 or later). Intel not supported.
+
 **7.1.4 Atmos bed → stereo binaural over IEMs.**
 
 ```
@@ -23,7 +29,7 @@ BlackHole 16ch → hearGOD → IEM output
 
 ## Requirements
 
-- macOS (Apple Silicon or Intel)
+- macOS 13.0+ — **Apple Silicon (M1 or later) only. Intel not supported.**
 - [BlackHole 16ch](https://existential.audio/blackhole/) — multichannel virtual audio device
 - A SOFA HRIR dataset (see [HRIR Datasets](#hrir-datasets))
 

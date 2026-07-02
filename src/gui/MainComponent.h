@@ -39,6 +39,7 @@ private:
     juce::ComboBox   eqProfileCombo_;
     juce::TextButton eqAddProfileBtn_;
     juce::TextButton eqRemoveProfileBtn_;
+    juce::TextButton eqSaveProfileBtn_;
     juce::TextButton eqBrowseBtn_;
     juce::TextButton targetCurveBtn_;
     juce::TextButton rawFRBtn_;
@@ -52,7 +53,11 @@ private:
 
     struct EQProfile {
         juce::String name;
-        juce::String path;
+        juce::String path;        // EQ .txt (may be empty)
+        juce::String rawFRPath;
+        juce::String targetPath;
+        float rawFROffset = 0.0f;
+        int normFreqIdx = 4;
     };
     juce::Array<EQProfile> eqProfiles_;
     int activeProfileIdx_ = -1;
@@ -99,6 +104,7 @@ private:
     void selectEQProfile(int idx);
     void saveProfiles();
     void restoreProfiles();
+    void saveActiveProfile();
     void loadTargetCurve(const juce::File& f);
     void loadRawFR(const juce::File& f);
     std::vector<std::pair<float, float>> parseFRFile(const juce::File& f);
