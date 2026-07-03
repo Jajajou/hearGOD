@@ -185,13 +185,17 @@ int main(int argc, char** argv)
         return 0;
     }
 
+    // Probe device SR before constructing engine — engine/loader need it at init time.
+    const int deviceSR = hearGOD::PortAudioBackend::probeDeviceSampleRate(cfg);
+    std::cout << "[Audio] Device sample rate: " << deviceSR << " Hz\n";
+
     // --- Build NUOLS engine (binaural mode only) ---
-    auto engine = std::make_shared<hearGOD::NUOLSEngine>(cfg.bufferFrames, 4);
+    auto engine = std::make_shared<hearGOD::NUOLSEngine>(cfg.bufferFrames, 4, deviceSR);
 
     if (!cfg.stereoEqMode) {
         // --- Load SOFA ---
         hearGOD::SOFALoader sofa;
-        if (!sofa.load(cfg.sofaPath)) {
+        if (!sofa.load(cfg.sofaPath, deviceSR)) {
             std::cerr << "Failed to load SOFA: " << cfg.sofaPath << "\n";
             return 1;
         }
@@ -246,13 +250,13 @@ int main(int argc, char** argv)
     // --- EQ ---
     auto eq = std::make_shared<hearGOD::BiquadChain>();
     if (!cfg.eqPath.empty()) {
-        auto preset = hearGOD::parsePEQ(cfg.eqPath, static_cast<float>(hearGOD::SAMPLE_RATE));
+        auto preset = hearGOD::parsePEQ(cfg.eqPath, static_cast<float>(deviceSR));
         if (!preset) {
             std::cerr << "Failed to load EQ preset: " << cfg.eqPath << "\n";
             return 1;
         }
 
-        auto coeffs = hearGOD::buildCoeffs(*preset, static_cast<float>(hearGOD::SAMPLE_RATE));
+        auto coeffs = hearGOD::buildCoeffs(*preset, static_cast<float>(deviceSR));
         eq->setFilters(coeffs);
         eq->setPreamp(preset->preampDb);
 

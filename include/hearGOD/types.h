@@ -5,7 +5,6 @@
 
 namespace hearGOD {
 
-constexpr int SAMPLE_RATE       = 48000;
 constexpr int BUFFER_FRAMES     = 256;      // default 5.33ms latency
 constexpr int MAX_BUFFER_FRAMES = 1024;     // stack limit for RT arrays
 constexpr int MAX_CHANNELS      = 16;       // BlackHole 16ch

@@ -11,7 +11,8 @@ namespace hearGOD {
 class NUOLSEngine {
 public:
     explicit NUOLSEngine(int partitionSize = BUFFER_FRAMES,
-                         int numPartitions = 4);
+                         int numPartitions = 4,
+                         int sampleRate    = 48000);
 
     void loadHRIR(Channel ch, const float* hrirL, const float* hrirR, int hrirLength);
 
@@ -50,9 +51,10 @@ private:
     };
     Biquad2 lfeBq1_, lfeBq2_;
 
-    // 172-sample dry delay to align LFE with HRTF convolution latency
-    static constexpr int LFE_DELAY_SAMPLES = 172;
-    std::array<float, LFE_DELAY_SAMPLES> lfeDelayBuf_{};
+    int sampleRate_    = 48000;
+    int lfeDelaySamples_ = 172; // computed from sampleRate_ in constructor
+
+    std::vector<float> lfeDelayBuf_;
     int lfeDelayWrite_ = 0;
 
     void initLfeLpf();

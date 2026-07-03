@@ -39,7 +39,7 @@ MainComponent::~MainComponent()
 void MainComponent::setupDeviceManager()
 {
     juce::AudioDeviceManager::AudioDeviceSetup setup;
-    setup.sampleRate    = SAMPLE_RATE;
+    // No SR hint — let JUCE negotiate native device SR.
     setup.bufferSize    = BUFFER_FRAMES;
     setup.inputChannels = (juce::BigInteger(1) << 16) - 1; // bits 0-15
     setup.outputChannels = 3;
@@ -372,7 +372,10 @@ void MainComponent::loadSOFA(const juce::File& f)
     const juce::String path = f.getFullPathName();
 
     SOFALoader sofa;
-    if (!sofa.load(path.toStdString())) {
+    const int sr = static_cast<int>(deviceManager_.getCurrentAudioDevice()
+                                    ? deviceManager_.getCurrentAudioDevice()->getCurrentSampleRate()
+                                    : 48000.0);
+    if (!sofa.load(path.toStdString(), sr)) {
         hrirPanel_.showError("Failed to load SOFA");
         logPanel_.log("SOFA load failed: " + f.getFileName(), LogPanel::Level::Error);
         return;
@@ -413,7 +416,7 @@ void MainComponent::loadSOFA(const juce::File& f)
     processor_.setEngine(std::move(engine));
 
     const int measurements = (int)(sofa.getAllHRIRs().size() / 2);
-    hrirPanel_.showSOFAInfo(path, measurements, sofa.irLength(), SAMPLE_RATE);
+    hrirPanel_.showSOFAInfo(path, measurements, sofa.irLength(), sr);
     multiMeter_.setActiveChannels(cfg.inputChannels);
     statusBar_.setText("SOFA loaded: " + f.getFileName() +
                        "  (" + juce::String(loaded) + " channels)",
@@ -427,8 +430,11 @@ void MainComponent::loadSOFA(const juce::File& f)
 
 void MainComponent::loadEQ(const juce::File& f)
 {
-    auto preset = parsePEQ(f.getFullPathName().toStdString(),
-                           static_cast<float>(SAMPLE_RATE));
+    const float sr = static_cast<float>(
+        deviceManager_.getCurrentAudioDevice()
+            ? deviceManager_.getCurrentAudioDevice()->getCurrentSampleRate()
+            : 48000.0);
+    auto preset = parsePEQ(f.getFullPathName().toStdString(), sr);
     if (!preset) {
         eqStatusLabel_.setText("EQ parse error", juce::dontSendNotification);
         eqStatusLabel_.setColour(juce::Label::textColourId, juce::Colour(kRed));
@@ -437,11 +443,11 @@ void MainComponent::loadEQ(const juce::File& f)
     }
 
     auto eq = std::make_shared<BiquadChain>();
-    eq->setFilters(buildCoeffs(*preset, static_cast<float>(SAMPLE_RATE)));
+    eq->setFilters(buildCoeffs(*preset, static_cast<float>(sr)));
     eq->setPreamp(preset->preampDb);
     processor_.setEQ(std::move(eq));
 
-    eqGraph_.setPreset(*preset, static_cast<float>(SAMPLE_RATE));
+    eqGraph_.setPreset(*preset, static_cast<float>(sr));
     eqStatusLabel_.setText(
         juce::String((int)preset->filters.size()) + " filters, preamp " +
         juce::String(preset->preampDb, 1) + " dB",

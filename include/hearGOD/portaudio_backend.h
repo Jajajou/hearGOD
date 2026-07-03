@@ -15,9 +15,13 @@ public:
                      std::shared_ptr<BiquadChain> eq);
     ~PortAudioBackend();
 
+    // Probe device SR without opening a stream. Returns 48000 on failure.
+    static int probeDeviceSampleRate(const AudioConfig& cfg);
+
     bool start();
     void stop();
     bool isRunning() const { return running_.load(); }
+    int deviceSampleRate() const { return deviceSampleRate_; }
 
     // List available devices to stdout
     static void listDevices();
@@ -36,6 +40,7 @@ private:
     PaStream* stream_          = nullptr;
     PaStream* keepAliveStream_ = nullptr;
     std::atomic<bool> running_{false};
+    int deviceSampleRate_      = 48000;
     Stats stats_;
     void* callbackUserData_ = nullptr;  // owned, freed in stop()
 

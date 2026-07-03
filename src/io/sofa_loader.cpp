@@ -15,7 +15,7 @@ SOFALoader::~SOFALoader()
     }
 }
 
-bool SOFALoader::load(const std::string& sofaPath)
+bool SOFALoader::load(const std::string& sofaPath, int deviceSampleRate)
 {
     if (sofa_) {
         mysofa_close(sofa_);
@@ -24,11 +24,11 @@ bool SOFALoader::load(const std::string& sofaPath)
     }
 
     int err = 0;
-    sofa_ = mysofa_open(sofaPath.c_str(), static_cast<float>(SAMPLE_RATE), &irLength_, &err);
+    sofa_ = mysofa_open(sofaPath.c_str(), static_cast<float>(deviceSampleRate), &irLength_, &err);
     if (!sofa_ || err != MYSOFA_OK) {
         // Retry without normalisation — needed for older SOFA 1.0 files (e.g. LISTEN/IRCAM)
         err = 0;
-        sofa_ = mysofa_open_no_norm(sofaPath.c_str(), static_cast<float>(SAMPLE_RATE), &irLength_, &err);
+        sofa_ = mysofa_open_no_norm(sofaPath.c_str(), static_cast<float>(deviceSampleRate), &irLength_, &err);
     }
     if (!sofa_ || err != MYSOFA_OK) {
         std::cerr << "[SOFALoader] mysofa_open failed, err=" << err
@@ -37,7 +37,7 @@ bool SOFALoader::load(const std::string& sofaPath)
         return false;
     }
 
-    sampleRate_ = SAMPLE_RATE;
+    sampleRate_ = deviceSampleRate;
     loaded_ = true;
 
     std::cout << "[SOFALoader] Loaded " << sofa_->hrtf->M
@@ -72,22 +72,11 @@ std::optional<HRIRPair> SOFALoader::getNearestHRIR(float azimuthDeg, float eleva
     pair.left.resize(irLength_);
     pair.right.resize(irLength_);
 
-    float delayL = 0.0f, delayR = 0.0f;
     mysofa_getfilter_float(sofa_, x, y, z,
                            pair.left.data(), pair.right.data(),
-                           &delayL, &delayR);
-
-    // Bake ITD into HRIR by prepending integer-sample delay.
-    // delayL/R in seconds. Round to nearest sample, shift IR right, zero-pad head.
-    auto applyDelay = [&](std::vector<float>& ir, float delaySec) {
-        int d = static_cast<int>(std::round(delaySec * static_cast<float>(SAMPLE_RATE)));
-        if (d <= 0 || d >= irLength_) return;
-        // Shift right by d samples, lose d samples from tail
-        std::move_backward(ir.begin(), ir.end() - d, ir.end());
-        std::fill(ir.begin(), ir.begin() + d, 0.0f);
-    };
-    applyDelay(pair.left,  delayL);
-    applyDelay(pair.right, delayR);
+                           &pair.delayL, &pair.delayR);
+    // ITD stored as seconds in pair.delayL/R; not baked into IR.
+    // Callers apply fractional delay as needed (Phase 2+3).
 
     return pair;
 }

@@ -9,12 +9,15 @@ static constexpr float PI = std::numbers::pi_v<float>;
 
 static float dbToLinear(float db) { return std::pow(10.0f, db / 20.0f); }
 
-NUOLSEngine::NUOLSEngine(int partitionSize, int numPartitions)
+NUOLSEngine::NUOLSEngine(int partitionSize, int numPartitions, int sampleRate)
     : partitionSize_(partitionSize)
     , numPartitions_(numPartitions)
+    , sampleRate_(sampleRate)
+    , lfeDelaySamples_(static_cast<int>(std::round(172.0f * sampleRate / 48000.0f)))
 {
     tempL_.resize(partitionSize_, 0.0f);
     tempR_.resize(partitionSize_, 0.0f);
+    lfeDelayBuf_.assign(lfeDelaySamples_, 0.0f);
 
     for (int i = 0; i < static_cast<int>(fdls_.size()); ++i) {
         fdls_[i].left  = std::make_unique<FDL>(partitionSize_, numPartitions_);
@@ -31,7 +34,7 @@ void NUOLSEngine::initLfeLpf()
     // Pole angles: (2k+1)*pi/(2*4), k=0,1 for upper two poles
     // Q values: 1/(2*cos(pole_angle)) → Q1=0.54120, Q2=1.30656
     float fc = 125.0f;
-    float fs = static_cast<float>(SAMPLE_RATE);
+    float fs = static_cast<float>(sampleRate_);
     float w0 = 2.0f * PI * fc / fs;
     float cw = std::cos(w0);
     float sw = std::sin(w0);
@@ -91,7 +94,7 @@ void NUOLSEngine::process(const float* const* in, float* out, int numChannels)
                 // LPF then write into delay line; read delayed sample for output
                 float filtered = lfeBq2_.tick(lfeBq1_.tick(lfe[f]));
                 lfeDelayBuf_[lfeDelayWrite_] = filtered;
-                lfeDelayWrite_ = (lfeDelayWrite_ + 1) % LFE_DELAY_SAMPLES;
+                lfeDelayWrite_ = (lfeDelayWrite_ + 1) % lfeDelaySamples_;
                 float s = lfeDelayBuf_[lfeDelayWrite_] * lfeGainLinear_;
                 out[2 * f]     += s;
                 out[2 * f + 1] += s;
