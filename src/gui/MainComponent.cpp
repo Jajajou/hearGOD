@@ -64,10 +64,10 @@ void MainComponent::setupControls()
 
     // Centre — EQ
     addAndMakeVisible(eqGraph_);
-    processor_.setWaveformSink([](const float* mono, int n) {
-        // Static trampoline not possible — wire via lambda stored in processor.
-        // This placeholder is replaced in loadSOFA after eqGraph_ ptr known.
-    });
+    processor_.setWaveformSink(&eqGraph_,
+        [](void* obj, const float* mono, int n) {
+            static_cast<EQGraph*>(obj)->pushWaveformSamples(mono, n);
+        });
     eqGraph_.startTimerHz(30);
 
     // EQ profile combo
