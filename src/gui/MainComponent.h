@@ -75,6 +75,7 @@ private:
     juce::ComboBox   inputDeviceCombo_;
     juce::ComboBox   outputDeviceCombo_;
     juce::TextButton modeBtn_;
+    juce::TextButton swapLRBtn_;
     juce::Label      statusBar_;
     bool             stereoEqMode_ = false;
 

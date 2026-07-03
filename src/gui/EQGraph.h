@@ -6,6 +6,7 @@
 #include "hearGOD/types.h"
 #include <vector>
 #include <functional>
+#include <atomic>
 
 namespace hearGOD {
 
@@ -39,6 +40,9 @@ public:
     // Per-curve manual offsets (dB) — applied after normalization.
     void setRawFROffset(float db);
     float rawFROffset() const noexcept { return rawFROffset_; }
+
+    // Audio-thread safe — lock-free ring buffer.
+    void pushWaveformSamples(const float* mono, int n) noexcept;
 
     void paint(juce::Graphics& g) override;
     void resized() override {}
@@ -77,7 +81,17 @@ private:
     static float interpolate(
         const std::vector<std::pair<float, float>>& pts, float freq) noexcept;
 
-    void timerCallback() override {}
+    // Waveform overlay — call from audio thread (lock-free ring buffer).
+    // Scale: [-1, +1] amplitude maps to ±kWaveDbRange dB around 0dB line.
+    static constexpr int   kWaveRingSize  = 4096; // power-of-2
+    static constexpr float kWaveDbRange   = 6.0f; // ±6 dB visual excursion
+    static constexpr uint32_t kWave       = 0xCCFFFFFF; // white 80%
+
+    std::array<float, kWaveRingSize> waveRing_{};
+    std::atomic<int> waveWrite_{0};  // audio thread writes
+    std::atomic<int> waveCount_{0};  // samples available
+
+    void timerCallback() override { if (waveCount_.load() > 0) repaint(); }
 
     float freqForX(float x, float width) const noexcept;
     float yForDb(float db, float height, float dbRange = 20.0f) const noexcept;

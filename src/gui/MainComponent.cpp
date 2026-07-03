@@ -64,6 +64,11 @@ void MainComponent::setupControls()
 
     // Centre — EQ
     addAndMakeVisible(eqGraph_);
+    processor_.setWaveformSink([](const float* mono, int n) {
+        // Static trampoline not possible — wire via lambda stored in processor.
+        // This placeholder is replaced in loadSOFA after eqGraph_ ptr known.
+    });
+    eqGraph_.startTimerHz(30);
 
     // EQ profile combo
     eqProfileCombo_.setTextWhenNothingSelected("No EQ preset");
@@ -281,6 +286,16 @@ void MainComponent::setupControls()
     };
     addAndMakeVisible(modeBtn_);
 
+    swapLRBtn_.setButtonText("L/R Swap");
+    swapLRBtn_.setClickingTogglesState(true);
+    swapLRBtn_.setColour(juce::TextButton::buttonColourId,   juce::Colour(kElevated));
+    swapLRBtn_.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xFF7C3AED));
+    swapLRBtn_.setColour(juce::TextButton::textColourOffId,  juce::Colour(kText));
+    swapLRBtn_.onClick = [this] {
+        processor_.setSwapLR(swapLRBtn_.getToggleState());
+    };
+    addAndMakeVisible(swapLRBtn_);
+
     // Status bar
     statusBar_.setColour(juce::Label::textColourId,       juce::Colour(kMuted));
     statusBar_.setColour(juce::Label::backgroundColourId, juce::Colour(kSurface));
@@ -489,6 +504,7 @@ void MainComponent::resized()
 
     // Header
     auto header = area.removeFromTop(kHeaderH);
+    swapLRBtn_.setBounds(header.removeFromRight(90).reduced(8, 12));
     modeBtn_.setBounds(header.removeFromRight(110).reduced(8, 12));
     // Device combos — sit right of logo (logo+version occupies ~200px)
     header.removeFromLeft(200); // skip logo area

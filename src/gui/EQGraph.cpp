@@ -49,6 +49,20 @@ void EQGraph::setTargetCurve(std::vector<std::pair<float, float>> points)
 
 void EQGraph::clearTargetCurve() { targetRaw_.clear(); repaint(); }
 
+void EQGraph::pushWaveformSamples(const float* mono, int n) noexcept
+{
+    int write = waveWrite_.load(std::memory_order_relaxed);
+    for (int i = 0; i < n; ++i) {
+        waveRing_[write & (kWaveRingSize - 1)] = mono[i];
+        ++write;
+    }
+    waveWrite_.store(write, std::memory_order_release);
+    // Clamp available count so GUI reads at most kWaveRingSize samples.
+    int avail = waveCount_.load(std::memory_order_relaxed) + n;
+    if (avail > kWaveRingSize) avail = kWaveRingSize;
+    waveCount_.store(avail, std::memory_order_release);
+}
+
 void EQGraph::setNormFreq(float hz)
 {
     normFreq_ = hz;
@@ -290,6 +304,30 @@ void EQGraph::paint(juce::Graphics& g)
             ? (juce::String(normFreq_ / 1000.0f, 0) + " kHz")
             : (juce::String((int)normFreq_) + " Hz");
         g.drawText(normStr, (int)(W - 80), ly, 72, th, juce::Justification::centredRight);
+    }
+
+    // Waveform overlay — post-mix mono signal oscillates around 0dB line.
+    const int avail = waveCount_.load(std::memory_order_acquire);
+    if (avail >= 2) {
+        const int write = waveWrite_.load(std::memory_order_acquire);
+        const int nDraw = std::min(avail, (int)W);
+        const float zeroY = H * (1.0f - (kDbRange / (2.0f * kDbRange)));
+        // 0dB line is at centre of kDbRange
+        const float dbCentreY = H * 0.5f; // 0dB at centre
+        juce::Path wave;
+        bool first = true;
+        for (int px = 0; px < nDraw; ++px) {
+            const int idx = (write - nDraw + px) & (kWaveRingSize - 1);
+            const float sample = waveRing_[idx];
+            // Map amplitude [-1,+1] → ±kWaveDbRange dB → pixel
+            const float dbOffset = sample * kWaveDbRange;
+            const float py = dbCentreY - (dbOffset / kDbRange) * H;
+            if (first) { wave.startNewSubPath((float)px, py); first = false; }
+            else        { wave.lineTo((float)px, py); }
+        }
+        g.setColour(juce::Colour(kWave));
+        g.strokePath(wave, juce::PathStrokeType(1.0f));
+        waveCount_.store(0, std::memory_order_release);
     }
 }
 

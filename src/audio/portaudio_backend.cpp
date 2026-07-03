@@ -11,7 +11,7 @@ struct CallbackUserData {
     PortAudioBackend::Stats* stats;
     PaStream*     stream = nullptr;  // set after Pa_OpenStream, for CPU load query
     int inputChannels;
-    bool swapLR       = false;
+    std::atomic<bool> swapLR{false};
     bool stereoEqMode = false;
     std::array<std::array<float, MAX_BUFFER_FRAMES>, MAX_CHANNELS> chBufs;
     std::array<float*, MAX_CHANNELS> chPtrs;
