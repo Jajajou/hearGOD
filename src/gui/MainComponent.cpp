@@ -68,7 +68,6 @@ void MainComponent::setupControls()
         [](void* obj, const float* mono, int n) {
             static_cast<EQGraph*>(obj)->pushWaveformSamples(mono, n);
         });
-    eqGraph_.startTimerHz(30);
 
     // EQ profile combo
     eqProfileCombo_.setTextWhenNothingSelected("No EQ preset");

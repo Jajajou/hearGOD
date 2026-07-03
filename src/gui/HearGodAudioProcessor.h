@@ -78,7 +78,6 @@ private:
     // Per-callback scratch buffer: interleaved stereo out, MAX_BUFFER_FRAMES*2.
     std::array<float, MAX_BUFFER_FRAMES * 2> interleavedOut_{};
     std::array<float, MAX_BUFFER_FRAMES>     waveMonoBuf_{};
-    std::atomic<WaveformCb*> waveformSink_{nullptr};
 
     Metrics metrics_;
 

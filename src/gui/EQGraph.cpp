@@ -7,6 +7,7 @@ namespace hearGOD {
 EQGraph::EQGraph()
 {
     setOpaque(true);
+    startTimerHz(30);
 }
 
 // --------------------------------------------------------------------------

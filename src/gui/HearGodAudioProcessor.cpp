@@ -94,10 +94,11 @@ void HearGodAudioProcessor::audioDeviceIOCallbackWithContext(
         metrics_.binauralPeakR.store(computePeak(outR, frames), std::memory_order_relaxed);
 
         // Feed waveform visualizer with mid (L+R)/2.
-        if (auto* cb = waveformSink_.load(std::memory_order_acquire)) {
+        if (auto fn = waveformSinkFn_.load(std::memory_order_acquire)) {
+            void* obj = waveformSinkObj_.load(std::memory_order_acquire);
             for (int f = 0; f < frames; ++f)
                 waveMonoBuf_[f] = (outL[f] + outR[f]) * 0.5f;
-            cb(waveMonoBuf_.data(), frames);
+            fn(obj, waveMonoBuf_.data(), frames);
         }
     }
 }
