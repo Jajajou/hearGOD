@@ -67,9 +67,11 @@ if(MYSOFA_STATIC_LIB)
     get_filename_component(_MYSOFA_LIB_DIR "${MYSOFA_STATIC_LIB}" DIRECTORY)
     set(_MYSOFA_INC "${_MYSOFA_LIB_DIR}/../include")
     set(_MYSOFA_LIB "${MYSOFA_STATIC_LIB}")
+    set(_MYSOFA_EXTRA_LIBS z)  # static libmysofa needs zlib (gunzip.c)
 else()
     set(_MYSOFA_INC "${MYSOFA_INCLUDE_DIRS}")
     set(_MYSOFA_LIB "${MYSOFA_LINK_LIBRARIES}")
+    set(_MYSOFA_EXTRA_LIBS "")
 endif()
 
 target_include_directories(hearGOD_core PUBLIC
@@ -87,6 +89,7 @@ target_link_libraries(hearGOD_core
     ${CORESERVICES_FRAMEWORK}
     ${_PORTAUDIO_LIB}
     ${_MYSOFA_LIB}
+    ${_MYSOFA_EXTRA_LIBS}
 )
 
 target_compile_options(hearGOD_core PRIVATE ${COMMON_COMPILE_OPTIONS})

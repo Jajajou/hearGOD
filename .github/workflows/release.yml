@@ -23,6 +23,7 @@ jobs:
           git clone --depth 1 https://github.com/hoene/libmysofa.git /tmp/libmysofa
           cmake -B /tmp/libmysofa/build -S /tmp/libmysofa \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
             -DBUILD_TESTS=OFF \
             -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_INSTALL_PREFIX=/tmp/mysofa-install
@@ -34,6 +35,7 @@ jobs:
           git clone --depth 1 https://github.com/PortAudio/portaudio.git /tmp/portaudio
           cmake -B /tmp/portaudio/build -S /tmp/portaudio \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
             -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_INSTALL_PREFIX=/tmp/portaudio-install
           cmake --build /tmp/portaudio/build --parallel
