@@ -7,6 +7,7 @@
 #include <vector>
 #include <functional>
 #include <atomic>
+#include <Accelerate/Accelerate.h>
 
 namespace hearGOD {
 
@@ -17,7 +18,7 @@ class EQGraph : public juce::Component, private juce::Timer
 {
 public:
     EQGraph();
-    ~EQGraph() override = default;
+    ~EQGraph() override { if (fftSetup_) vDSP_destroy_fftsetup(fftSetup_); }
 
     // EQ filter response — call after loading a preset.
     void setPreset(const PEQPreset& preset, float sampleRate = 48000.0f);
@@ -81,17 +82,29 @@ private:
     static float interpolate(
         const std::vector<std::pair<float, float>>& pts, float freq) noexcept;
 
-    // Waveform overlay — call from audio thread (lock-free ring buffer).
-    // Scale: [-1, +1] amplitude maps to ±kWaveDbRange dB around 0dB line.
-    static constexpr int   kWaveRingSize  = 4096; // power-of-2
-    static constexpr float kWaveDbRange   = 6.0f; // ±6 dB visual excursion
-    static constexpr uint32_t kWave       = 0xCCFFFFFF; // white 80%
+    // Spectrum analyzer — audio thread feeds ring, GUI thread runs FFT on timer.
+    static constexpr int kFFTOrder     = 11;           // 2048-point FFT
+    static constexpr int kFFTSize      = 1 << kFFTOrder;
+    static constexpr int kSpecBins     = kFFTSize / 2;
+    static constexpr int kWaveRingSize = kFFTSize * 4; // power-of-2, ≥ kFFTSize
+    static constexpr uint32_t kSpectrum = 0x4DFFB3FF;  // teal-green
 
     std::array<float, kWaveRingSize> waveRing_{};
-    std::atomic<int> waveWrite_{0};  // audio thread writes
-    std::atomic<int> waveCount_{0};  // samples available
+    std::atomic<int>  waveWrite_{0};
+    std::atomic<bool> waveReady_{false};
 
-    void timerCallback() override { if (waveCount_.load() > 0) repaint(); }
+    // FFT scratch (GUI thread only — no locking needed)
+    std::array<float, kFFTSize>   fftWindow_{};    // Hann window coefficients
+    std::array<float, kFFTSize>   fftBuf_{};
+    DSPSplitComplex               fftSplit_{};
+    std::array<float, kSpecBins>  fftReal_{};
+    std::array<float, kSpecBins>  fftImag_{};
+    std::array<float, kSpecBins>  specSmooth_{};   // smoothed magnitude dB
+    FFTSetup                      fftSetup_{};
+
+    void initFFT();
+    void timerCallback() override;
+    void runSpectrum();                            // called from timerCallback
 
     float freqForX(float x, float width) const noexcept;
     float yForDb(float db, float height, float dbRange = 20.0f) const noexcept;
