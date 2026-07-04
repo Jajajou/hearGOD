@@ -65,6 +65,7 @@ private:
     // Right column
     MultiChannelMeter multiMeter_;
     juce::Label       xrunLabel_;
+    juce::Label       latencyLabel_;
 
     // Log panel (collapsible, bottom)
     LogPanel         logPanel_;

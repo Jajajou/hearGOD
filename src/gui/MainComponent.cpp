@@ -225,6 +225,11 @@ void MainComponent::setupControls()
     xrunLabel_.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(xrunLabel_);
 
+    latencyLabel_.setColour(juce::Label::textColourId, juce::Colour(kMuted));
+    latencyLabel_.setFont(juce::Font(juce::FontOptions{}.withHeight(10.0f)));
+    latencyLabel_.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(latencyLabel_);
+
     // Device selectors
     auto styleCombo = [](juce::ComboBox& c) {
         c.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xFF1C1C23));
@@ -495,6 +500,16 @@ void MainComponent::timerCallback()
                       LogPanel::Level::Warn);
         lastXruns_ = xruns;
     }
+
+    if (auto* dev = deviceManager_.getCurrentAudioDevice()) {
+        const double sr      = dev->getCurrentSampleRate();
+        const int    frames  = processor_.config().bufferFrames;
+        const double latMs   = sr > 0.0 ? (frames / sr) * 1000.0 : 0.0;
+        latencyLabel_.setText(juce::String(latMs, 1) + " ms  |  "
+                              + juce::String(frames) + " frames  |  "
+                              + juce::String(static_cast<int>(sr)) + " Hz",
+                              juce::dontSendNotification);
+    }
 }
 
 void MainComponent::resized()
@@ -531,6 +546,7 @@ void MainComponent::resized()
     // Right: meters on top, xrun label at bottom
     auto right = rightCol.reduced(6);
     xrunLabel_.setBounds(right.removeFromBottom(16));
+    latencyLabel_.setBounds(right.removeFromBottom(16));
     multiMeter_.setBounds(right);
 
     // Centre: EQ controls + graph
