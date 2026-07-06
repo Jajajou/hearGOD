@@ -6,6 +6,9 @@
 #include "hearGOD/portaudio_backend.h"
 #include "hearGOD/config_file.h"
 #include "hearGOD/dfe_compensator.h"
+#include "hearGOD/head_tracker.h"
+#include "hearGOD/tracking_controller.h"
+#include <cmath>
 #include <iostream>
 #include <csignal>
 #include <atomic>
@@ -38,6 +41,7 @@ static void printUsage(const char* prog)
         "  --keep-alive         Send silent stream to keep DAC awake (avoids idle pops)\n"
         "  --swap-lr            Swap L/R output channels (for reversed IEM wear)\n"
         "  --no-dfe             Disable diffuse-field EQ compensation (raw HRTF)\n"
+        "  --headtrack [port]   Enable OpenTrack UDP head tracking (default port 4242)\n"
         "  --list-devices       List audio devices and exit\n"
         "  --help               Show this help\n"
         "\n"
@@ -119,6 +123,7 @@ struct ParseResult {
     bool saveConfig  = false;
     bool listDevices = false;
     bool noDFE       = false;
+    int  headtrackPort = 0;  // 0 = off; --headtrack enables (default 4242)
 };
 
 static ParseResult parseArgs(int argc, char** argv)
@@ -159,6 +164,11 @@ static ParseResult parseArgs(int argc, char** argv)
         else if (a == "--keep-alive")   r.cfg.keepAlive = true;
         else if (a == "--swap-lr")      r.cfg.swapLR    = true;
         else if (a == "--no-dfe")       r.noDFE         = true;
+        else if (a == "--headtrack") {
+            r.headtrackPort = 4242;
+            if (i + 1 < argc && argv[i + 1][0] != '-')
+                r.headtrackPort = std::stoi(argv[++i]);
+        }
         else if (a == "--help" || a == "-h") { printUsage(argv[0]); std::exit(0); }
         else { std::cerr << "Unknown option: " << a << "\n"; printUsage(argv[0]); std::exit(1); }
     }
@@ -167,7 +177,7 @@ static ParseResult parseArgs(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
-    auto [cfg, configPath, saveConfig, listDevices, noDFE] = parseArgs(argc, argv);
+    auto [cfg, configPath, saveConfig, listDevices, noDFE, headtrackPort] = parseArgs(argc, argv);
 
     if (listDevices) {
         hearGOD::PortAudioBackend::listDevices();
@@ -185,16 +195,28 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    // --- Build NUOLS engine (binaural mode only) ---
-    auto engine = std::make_shared<hearGOD::NUOLSEngine>(cfg.bufferFrames, 4);
+    // Probe device SR before constructing engine — engine/loader need it at init time.
+    const int deviceSR = hearGOD::PortAudioBackend::probeDeviceSampleRate(cfg);
+    std::cout << "[Audio] Device sample rate: " << deviceSR << " Hz\n";
 
+    // --- Load SOFA FIRST (binaural mode) so engine partition count fits the IR ---
+    hearGOD::SOFALoader sofa;
+    hearGOD::DFECompensator dfe;
+    int numPartitions = 4;
     if (!cfg.stereoEqMode) {
-        // --- Load SOFA ---
-        hearGOD::SOFALoader sofa;
-        if (!sofa.load(cfg.sofaPath)) {
+        if (!sofa.load(cfg.sofaPath, deviceSR)) {
             std::cerr << "Failed to load SOFA: " << cfg.sofaPath << "\n";
             return 1;
         }
+        // Long BRIRs need more partitions or the tail is silently truncated.
+        numPartitions = std::max(1, (sofa.irLength() + cfg.bufferFrames - 1) / cfg.bufferFrames);
+        std::cout << "[Engine] IR " << sofa.irLength() << " taps → "
+                  << numPartitions << " partitions\n";
+    }
+
+    auto engine = std::make_shared<hearGOD::NUOLSEngine>(cfg.bufferFrames, numPartitions, deviceSR);
+
+    if (!cfg.stereoEqMode) {
 
         engine->setMasterGainDb(cfg.masterGainDb);
         engine->setLfeGainDb(cfg.lfeGainDb);
@@ -224,7 +246,6 @@ int main(int argc, char** argv)
         // --- Diffuse-Field EQ (on by default, --no-dfe to skip) ---
         if (!noDFE) {
             auto allHrirs = sofa.getAllHRIRs();
-            hearGOD::DFECompensator dfe;
             dfe.compute(allHrirs, sofa.irLength());
             if (dfe.isReady()) {
                 for (int i = 0; i < numInputChannels && i < hearGOD::MAX_CHANNELS; ++i) {
@@ -246,13 +267,13 @@ int main(int argc, char** argv)
     // --- EQ ---
     auto eq = std::make_shared<hearGOD::BiquadChain>();
     if (!cfg.eqPath.empty()) {
-        auto preset = hearGOD::parsePEQ(cfg.eqPath, static_cast<float>(hearGOD::SAMPLE_RATE));
+        auto preset = hearGOD::parsePEQ(cfg.eqPath, static_cast<float>(deviceSR));
         if (!preset) {
             std::cerr << "Failed to load EQ preset: " << cfg.eqPath << "\n";
             return 1;
         }
 
-        auto coeffs = hearGOD::buildCoeffs(*preset, static_cast<float>(hearGOD::SAMPLE_RATE));
+        auto coeffs = hearGOD::buildCoeffs(*preset, static_cast<float>(deviceSR));
         eq->setFilters(coeffs);
         eq->setPreamp(preset->preampDb);
 
@@ -293,9 +314,34 @@ int main(int argc, char** argv)
     std::signal(SIGINT,  sigHandler);
     std::signal(SIGTERM, sigHandler);
 
+    // --- Head tracking (OpenTrack UDP) ---
+    hearGOD::HeadTracker tracker;
+    std::unique_ptr<hearGOD::TrackingController> trackCtl;
+    std::thread trackThread;
+    std::atomic<bool> trackRunning{false};
+    if (headtrackPort > 0 && !cfg.stereoEqMode) {
+        if (tracker.start(static_cast<uint16_t>(headtrackPort))) {
+            trackCtl = std::make_unique<hearGOD::TrackingController>(tracker, sofa, engine);
+            if (!noDFE && dfe.isReady()) trackCtl->setDFE(&dfe);
+            trackRunning.store(true);
+            trackThread = std::thread([&] {
+                while (trackRunning.load())
+                {
+                    trackCtl->update();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                }
+            });
+            std::cout << "[HeadTrack] listening on UDP :" << headtrackPort << "\n";
+        } else {
+            std::cerr << "[HeadTrack] failed to bind UDP :" << headtrackPort << "\n";
+        }
+    }
+
     // --- TUI loop ---
     tuiLoop(backend, cfg);
 
+    if (trackRunning.exchange(false) && trackThread.joinable()) trackThread.join();
+    tracker.stop();
     backend.stop();
     std::cout << "\nhearGOD stopped.\n";
     return 0;

@@ -6,6 +6,8 @@
 #include "hearGOD/types.h"
 #include <vector>
 #include <functional>
+#include <atomic>
+#include <Accelerate/Accelerate.h>
 
 namespace hearGOD {
 
@@ -16,7 +18,7 @@ class EQGraph : public juce::Component, private juce::Timer
 {
 public:
     EQGraph();
-    ~EQGraph() override = default;
+    ~EQGraph() override { if (fftSetup_) vDSP_destroy_fftsetup(fftSetup_); }
 
     // EQ filter response — call after loading a preset.
     void setPreset(const PEQPreset& preset, float sampleRate = 48000.0f);
@@ -39,6 +41,9 @@ public:
     // Per-curve manual offsets (dB) — applied after normalization.
     void setRawFROffset(float db);
     float rawFROffset() const noexcept { return rawFROffset_; }
+
+    // Audio-thread safe — lock-free ring buffer.
+    void pushWaveformSamples(const float* mono, int n) noexcept;
 
     void paint(juce::Graphics& g) override;
     void resized() override {}
@@ -77,7 +82,29 @@ private:
     static float interpolate(
         const std::vector<std::pair<float, float>>& pts, float freq) noexcept;
 
-    void timerCallback() override {}
+    // Spectrum analyzer — audio thread feeds ring, GUI thread runs FFT on timer.
+    static constexpr int kFFTOrder     = 11;           // 2048-point FFT
+    static constexpr int kFFTSize      = 1 << kFFTOrder;
+    static constexpr int kSpecBins     = kFFTSize / 2;
+    static constexpr int kWaveRingSize = kFFTSize * 4; // power-of-2, ≥ kFFTSize
+    static constexpr uint32_t kSpectrum = 0x4DFFB3FF;  // teal-green
+
+    std::array<float, kWaveRingSize> waveRing_{};
+    std::atomic<int>  waveWrite_{0};
+    std::atomic<bool> waveReady_{false};
+
+    // FFT scratch (GUI thread only — no locking needed)
+    std::array<float, kFFTSize>   fftWindow_{};    // Hann window coefficients
+    std::array<float, kFFTSize>   fftBuf_{};
+    DSPSplitComplex               fftSplit_{};
+    std::array<float, kSpecBins>  fftReal_{};
+    std::array<float, kSpecBins>  fftImag_{};
+    std::array<float, kSpecBins>  specSmooth_{};   // smoothed magnitude dB
+    FFTSetup                      fftSetup_{};
+
+    void initFFT();
+    void timerCallback() override;
+    void runSpectrum();                            // called from timerCallback
 
     float freqForX(float x, float width) const noexcept;
     float yForDb(float db, float height, float dbRange = 20.0f) const noexcept;

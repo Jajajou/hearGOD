@@ -20,6 +20,8 @@ using namespace hearGOD;
 // Helpers
 // ---------------------------------------------------------------------------
 
+static constexpr int SAMPLE_RATE = 48000;
+
 static std::vector<float> diracHRIR(int length)
 {
     std::vector<float> h(length, 0.0f);

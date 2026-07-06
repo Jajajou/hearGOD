@@ -133,3 +133,81 @@ TEST(FDL, MultipleBlocksContinuousStream)
             EXPECT_TRUE(std::isfinite(out[i])) << "block=" << block << " out[" << i << "] not finite";
     }
 }
+
+// ---- crossfade tests ---------------------------------------------------------
+
+// (a) Crossfade to same IR → output matches baseline (MSE < 1e-4 per block)
+TEST(FDLCrossfade, SameIROutputMatchesBaseline)
+{
+    const int P = 256, N = 4, XF = 5;
+    auto hrir = impulse(P * N);
+
+    FDL baseline(P, N, XF);
+    baseline.loadHRIR(hrir.data(), static_cast<int>(hrir.size()));
+
+    FDL fdl(P, N, XF);
+    fdl.loadHRIR(hrir.data(), static_cast<int>(hrir.size()));
+    EXPECT_TRUE(fdl.loadHRIRPending(hrir.data(), static_cast<int>(hrir.size())));
+
+    std::vector<float> in(P, 0.0f);
+    in[0] = 1.0f;
+
+    for (int b = 0; b < XF + 1; ++b) {
+        std::vector<float> outBase(P), outFdl(P);
+        std::vector<float> inCopy = in;
+        baseline.process(in.data(), outBase.data());
+        fdl.process(inCopy.data(), outFdl.data());
+        in.assign(P, 0.0f);
+        float mse = 0.0f;
+        for (int i = 0; i < P; ++i) { float d = outBase[i] - outFdl[i]; mse += d * d; }
+        EXPECT_LT(mse / P, 1e-4f) << "block " << b;
+    }
+    EXPECT_FALSE(fdl.isCrossfading());
+}
+
+// (b) Crossfade to different IR → no sample discontinuity (|Δsample| <= 2.0)
+TEST(FDLCrossfade, DifferentIRNoContinuityGlitch)
+{
+    const int P = 256, N = 4, XF = 5;
+    FDL fdl(P, N, XF);
+    auto hrirA = impulse(P * N);
+    auto hrirB = delayedImpulse(P * N, 64);
+    fdl.loadHRIR(hrirA.data(), static_cast<int>(hrirA.size()));
+    EXPECT_TRUE(fdl.loadHRIRPending(hrirB.data(), static_cast<int>(hrirB.size())));
+
+    std::vector<float> in(P, 0.0f), prev(P, 0.0f);
+    in[0] = 1.0f;
+
+    for (int b = 0; b < XF + 2; ++b) {
+        std::vector<float> out(P);
+        fdl.process(in.data(), out.data());
+        in.assign(P, 0.0f);
+        if (b > 0) {
+            for (int i = 0; i < P; ++i) {
+                EXPECT_LE(std::abs(out[i] - prev[i]), 2.0f) << "block " << b << " sample " << i;
+                EXPECT_TRUE(std::isfinite(out[i]));
+            }
+        }
+        prev = out;
+    }
+    EXPECT_FALSE(fdl.isCrossfading());
+}
+
+// (c) loadHRIRPending while fade in flight → rejected
+TEST(FDLCrossfade, PendingRejectedWhileFading)
+{
+    const int P = 256, N = 4, XF = 20;
+    FDL fdl(P, N, XF);
+    auto hrirA = impulse(P * N);
+    auto hrirB = delayedImpulse(P * N, 10);
+    auto hrirC = delayedImpulse(P * N, 20);
+
+    fdl.loadHRIR(hrirA.data(), static_cast<int>(hrirA.size()));
+    EXPECT_TRUE(fdl.loadHRIRPending(hrirB.data(), static_cast<int>(hrirB.size())));
+
+    std::vector<float> in(P, 0.0f), out(P);
+    fdl.process(in.data(), out.data()); // triggers Fading state
+
+    EXPECT_TRUE(fdl.isCrossfading());
+    EXPECT_FALSE(fdl.loadHRIRPending(hrirC.data(), static_cast<int>(hrirC.size())));
+}

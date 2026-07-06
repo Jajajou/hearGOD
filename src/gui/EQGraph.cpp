@@ -1,12 +1,66 @@
 #include "EQGraph.h"
 #include <cmath>
 #include <algorithm>
+#include <Accelerate/Accelerate.h>
 
 namespace hearGOD {
 
 EQGraph::EQGraph()
 {
     setOpaque(true);
+    initFFT();
+    startTimerHz(30);
+}
+
+void EQGraph::initFFT()
+{
+    fftSetup_ = vDSP_create_fftsetup(kFFTOrder, FFT_RADIX2);
+    fftSplit_.realp = fftReal_.data();
+    fftSplit_.imagp = fftImag_.data();
+
+    // Pre-compute Hann window
+    for (int i = 0; i < kFFTSize; ++i)
+        fftWindow_[i] = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / (kFFTSize - 1)));
+
+    specSmooth_.fill(-120.0f);
+}
+
+void EQGraph::timerCallback()
+{
+    if (waveReady_.exchange(false))
+    {
+        runSpectrum();
+        repaint();
+    }
+}
+
+void EQGraph::runSpectrum()
+{
+    // Snapshot newest kFFTSize samples from ring (GUI thread, no lock needed —
+    // worst case we read a partially-written frame, acceptable for a visualizer).
+    const int writePos = waveWrite_.load(std::memory_order_acquire);
+    for (int i = 0; i < kFFTSize; ++i)
+    {
+        int idx = (writePos - kFFTSize + i + kWaveRingSize) & (kWaveRingSize - 1);
+        fftBuf_[i] = waveRing_[idx] * fftWindow_[i];
+    }
+
+    // Pack real into split-complex (imaginary = 0 → interleaved pairs trick)
+    vDSP_ctoz(reinterpret_cast<DSPComplex*>(fftBuf_.data()),
+               2, &fftSplit_, 1, kSpecBins);
+
+    vDSP_fft_zrip(fftSetup_, &fftSplit_, 1, kFFTOrder, FFT_FORWARD);
+
+    // Magnitude in dB, leaky-integrator smooth (α = 0.25 new, 0.75 old)
+    constexpr float kRef   = static_cast<float>(kFFTSize);
+    constexpr float kAlpha = 0.25f;
+    constexpr float kBeta  = 1.0f - kAlpha;
+    for (int i = 1; i < kSpecBins; ++i)  // skip DC bin 0
+    {
+        float mag   = std::sqrt(fftReal_[i] * fftReal_[i] + fftImag_[i] * fftImag_[i]) / kRef;
+        float db    = 20.0f * std::log10(std::max(mag, 1e-9f));
+        specSmooth_[i] = kAlpha * db + kBeta * specSmooth_[i];
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -48,6 +102,17 @@ void EQGraph::setTargetCurve(std::vector<std::pair<float, float>> points)
 }
 
 void EQGraph::clearTargetCurve() { targetRaw_.clear(); repaint(); }
+
+void EQGraph::pushWaveformSamples(const float* mono, int n) noexcept
+{
+    int write = waveWrite_.load(std::memory_order_relaxed);
+    for (int i = 0; i < n; ++i) {
+        waveRing_[write & (kWaveRingSize - 1)] = mono[i];
+        ++write;
+    }
+    waveWrite_.store(write, std::memory_order_release);
+    waveReady_.store(true, std::memory_order_release);
+}
 
 void EQGraph::setNormFreq(float hz)
 {
@@ -290,6 +355,39 @@ void EQGraph::paint(juce::Graphics& g)
             ? (juce::String(normFreq_ / 1000.0f, 0) + " kHz")
             : (juce::String((int)normFreq_) + " Hz");
         g.drawText(normStr, (int)(W - 80), ly, 72, th, juce::Justification::centredRight);
+    }
+
+    // Spectrum analyzer overlay — log-freq bins, filled area beneath curve.
+    {
+        constexpr float kSpecFloor = -90.0f;
+        constexpr float kSpecCeil  =   0.0f;
+        const float sampleRate = eqSampleRate_ > 0.0f ? eqSampleRate_ : 48000.0f;
+        const float nyquist    = sampleRate * 0.5f;
+
+        juce::Path spec;
+        spec.startNewSubPath(0.0f, (float)H);
+
+        for (int px = 0; px < (int)W; ++px)
+        {
+            const float frac = (float)px / (float)(W - 1);
+            const float freq = 20.0f * std::pow(1000.0f, frac); // log 20→20kHz
+            if (freq > nyquist) break;
+
+            const int bin = std::clamp(
+                static_cast<int>(freq / nyquist * kSpecBins),
+                1, kSpecBins - 1);
+
+            const float db = std::clamp(specSmooth_[bin], kSpecFloor, kSpecCeil);
+            const float py = H * (1.0f - (db - kSpecFloor) / (kSpecCeil - kSpecFloor));
+            spec.lineTo((float)px, py);
+        }
+        spec.lineTo((float)W, (float)H);
+        spec.closeSubPath();
+
+        g.setColour(juce::Colour(kSpectrum).withAlpha(0.18f));
+        g.fillPath(spec);
+        g.setColour(juce::Colour(kSpectrum).withAlpha(0.70f));
+        g.strokePath(spec, juce::PathStrokeType(1.5f));
     }
 }
 

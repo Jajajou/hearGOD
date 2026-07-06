@@ -5,6 +5,8 @@
 #include "hearGOD/types.h"
 #include <memory>
 #include <atomic>
+#include <functional>
+#include <array>
 
 namespace hearGOD {
 
@@ -27,6 +29,19 @@ public:
         if (engine_) engine_->setMasterGainDb(db);
     }
     void setStereoEqMode(bool stereo) { config_.stereoEqMode = stereo; }
+    void setSwapLR(bool swap)         { config_.swapLR = swap; }
+
+    // Pointer to EQGraph::pushWaveformSamples — set from GUI thread, called on audio thread.
+    // EQGraph must outlive audio device. Pass nullptr to disable.
+    std::atomic<void*> waveformSinkObj_{nullptr};
+    using WaveformPushFn = void(*)(void*, const float*, int);
+    std::atomic<WaveformPushFn> waveformSinkFn_{nullptr};
+
+    template<typename T>
+    void setWaveformSink(T* obj, WaveformPushFn fn) {
+        waveformSinkObj_.store(obj, std::memory_order_release);
+        waveformSinkFn_.store(fn, std::memory_order_release);
+    }
 
     // Metrics updated each callback.
     struct Metrics {
@@ -62,6 +77,7 @@ private:
 
     // Per-callback scratch buffer: interleaved stereo out, MAX_BUFFER_FRAMES*2.
     std::array<float, MAX_BUFFER_FRAMES * 2> interleavedOut_{};
+    std::array<float, MAX_BUFFER_FRAMES>     waveMonoBuf_{};
 
     Metrics metrics_;
 

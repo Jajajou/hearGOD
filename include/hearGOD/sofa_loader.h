@@ -8,11 +8,13 @@
 namespace hearGOD {
 
 struct HRIRPair {
-    std::vector<float> left;   // time-domain, length = irLength
+    std::vector<float> left;   // time-domain, length = irLength (ITD NOT baked in)
     std::vector<float> right;
     int irLength = 0;
     float azimuth   = 0.0f;  // degrees (target position used to query)
     float elevation = 0.0f;
+    float delayL = 0.0f;  // ITD delay in seconds (left ear)
+    float delayR = 0.0f;  // ITD delay in seconds (right ear)
 };
 
 class SOFALoader {
@@ -23,8 +25,8 @@ public:
     SOFALoader(const SOFALoader&) = delete;
     SOFALoader& operator=(const SOFALoader&) = delete;
 
-    // Load .sofa file. Returns false + logs error on failure.
-    bool load(const std::string& sofaPath);
+    // Load .sofa file at the given device sample rate. Returns false + logs error on failure.
+    bool load(const std::string& sofaPath, int deviceSampleRate);
 
     // Get HRIR nearest to target spherical position (degrees).
     // Uses mysofa_getfilter_float (Cartesian internally) — correct for any SOFA dataset.

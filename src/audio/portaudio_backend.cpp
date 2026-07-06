@@ -11,7 +11,7 @@ struct CallbackUserData {
     PortAudioBackend::Stats* stats;
     PaStream*     stream = nullptr;  // set after Pa_OpenStream, for CPU load query
     int inputChannels;
-    bool swapLR       = false;
+    std::atomic<bool> swapLR{false};
     bool stereoEqMode = false;
     std::array<std::array<float, MAX_BUFFER_FRAMES>, MAX_CHANNELS> chBufs;
     std::array<float*, MAX_CHANNELS> chPtrs;
@@ -83,9 +83,11 @@ bool PortAudioBackend::start()
     for (int i = 0; i < MAX_CHANNELS; ++i)
         ud->chPtrs[i] = ud->chBufs[i].data();
 
+    double deviceSR = Pa_GetDeviceInfo(outParams.device)->defaultSampleRate;
+    deviceSampleRate_ = static_cast<int>(deviceSR);
     PaError err = Pa_OpenStream(&stream_,
                                 &inParams, &outParams,
-                                SAMPLE_RATE,
+                                deviceSR,
                                 config_.bufferFrames,
                                 paClipOff,
                                 paCallback,
@@ -142,7 +144,7 @@ bool PortAudioBackend::startKeepAlive()
 
     PaError err = Pa_OpenStream(&keepAliveStream_,
                                 nullptr, &kaParams,
-                                SAMPLE_RATE, BUFFER_FRAMES,
+                                static_cast<double>(deviceSampleRate_), BUFFER_FRAMES,
                                 paClipOff,
                                 keepAliveCallback, nullptr);
     if (err != paNoError) {
@@ -198,6 +200,21 @@ void PortAudioBackend::listDevices()
                   << "  out=" << info->maxOutputChannels << "\n";
     }
     paTerm();
+}
+
+int PortAudioBackend::probeDeviceSampleRate(const AudioConfig& cfg)
+{
+    if (!paInit()) return 48000;
+    PaDeviceIndex outDev = cfg.outputDevice >= 0
+        ? cfg.outputDevice
+        : Pa_GetDefaultOutputDevice();
+    int sr = 48000;
+    if (outDev != paNoDevice) {
+        const PaDeviceInfo* info = Pa_GetDeviceInfo(outDev);
+        if (info) sr = static_cast<int>(info->defaultSampleRate);
+    }
+    paTerm();
+    return sr;
 }
 
 int PortAudioBackend::paCallback(const void* inputBuffer,

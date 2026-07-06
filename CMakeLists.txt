@@ -44,9 +44,11 @@ set(CORE_SOURCES
     src/core/nuols_engine.cpp
     src/core/fdl.cpp
     src/core/dfe_compensator.cpp
+    src/core/tracking_controller.cpp
     src/audio/channel_router.cpp
     src/audio/portaudio_backend.cpp
     src/io/sofa_loader.cpp
+    src/io/head_tracker.cpp
     src/eq/biquad_chain.cpp
     src/eq/peq_parser.cpp
     src/config/config_file.cpp
@@ -118,6 +120,8 @@ if(BUILD_TESTING)
         tests/test_sofa.cpp
         tests/test_peq.cpp
         tests/test_integration.cpp
+        tests/test_head_rotation.cpp
+        tests/test_head_tracker.cpp
     )
 
     add_executable(hearGOD_tests ${TEST_SOURCES})
@@ -148,6 +152,11 @@ target_sources(hearGOD_app PRIVATE
     src/gui/main_juce.cpp
     src/gui/MainWindow.cpp
     src/gui/MainComponent.cpp
+    src/gui/MainComponent_device.cpp
+    src/gui/MainComponent_controls.cpp
+    src/gui/MainComponent_files.cpp
+    src/gui/MainComponent_profiles.cpp
+    src/gui/MainComponent_state.cpp
     src/gui/HearGodAudioProcessor.cpp
     src/gui/EQGraph.cpp
     src/gui/MultiChannelMeter.cpp
