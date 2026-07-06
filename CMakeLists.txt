@@ -44,9 +44,11 @@ set(CORE_SOURCES
     src/core/nuols_engine.cpp
     src/core/fdl.cpp
     src/core/dfe_compensator.cpp
+    src/core/tracking_controller.cpp
     src/audio/channel_router.cpp
     src/audio/portaudio_backend.cpp
     src/io/sofa_loader.cpp
+    src/io/head_tracker.cpp
     src/eq/biquad_chain.cpp
     src/eq/peq_parser.cpp
     src/config/config_file.cpp
@@ -118,6 +120,8 @@ if(BUILD_TESTING)
         tests/test_sofa.cpp
         tests/test_peq.cpp
         tests/test_integration.cpp
+        tests/test_head_rotation.cpp
+        tests/test_head_tracker.cpp
     )
 
     add_executable(hearGOD_tests ${TEST_SOURCES})

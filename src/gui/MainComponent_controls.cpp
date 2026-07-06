@@ -258,6 +258,22 @@ void MainComponent::setupControls()
     };
     addAndMakeVisible(swapLRBtn_);
 
+    // Head tracking toggle
+    headTrackBtn_.setButtonText("Head Track");
+    headTrackBtn_.setClickingTogglesState(true);
+    headTrackBtn_.setColour(juce::TextButton::buttonColourId,   juce::Colour(kElevated));
+    headTrackBtn_.setColour(juce::TextButton::buttonOnColourId, juce::Colour(kGreen));
+    headTrackBtn_.setColour(juce::TextButton::textColourOffId,  juce::Colour(kText));
+    headTrackBtn_.onClick = [this] {
+        if (headTrackBtn_.getToggleState()) {
+            if (!headTracker_.start(4242))
+                logPanel_.log("HeadTracker: UDP bind failed on port 4242", LogPanel::Level::Warn);
+        } else {
+            headTracker_.stop();
+        }
+    };
+    addAndMakeVisible(headTrackBtn_);
+
     // Status bar
     statusBar_.setColour(juce::Label::textColourId,       juce::Colour(kMuted));
     statusBar_.setColour(juce::Label::backgroundColourId, juce::Colour(kSurface));

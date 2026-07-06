@@ -73,6 +73,27 @@ void NUOLSEngine::loadHRIR(Channel ch, const float* hrirL, const float* hrirR, i
     fdls_[idx].right->loadHRIR(hrirR, hrirLength);
 }
 
+bool NUOLSEngine::loadHRIRPending(Channel ch, const float* hrirL, const float* hrirR, int hrirLength)
+{
+    int idx = static_cast<int>(ch);
+    if (idx >= static_cast<int>(fdls_.size())) return false;
+    auto& pair = fdls_[idx];
+    if (!pair.left || !pair.right) return false;
+    if (pair.left->isCrossfading() || pair.right->isCrossfading()) return false;
+    bool okL = pair.left->loadHRIRPending(hrirL, hrirLength);
+    bool okR = pair.right->loadHRIRPending(hrirR, hrirLength);
+    return okL && okR;
+}
+
+bool NUOLSEngine::isCrossfading() const
+{
+    for (const auto& pair : fdls_) {
+        if (pair.left && pair.left->isCrossfading()) return true;
+        if (pair.right && pair.right->isCrossfading()) return true;
+    }
+    return false;
+}
+
 bool NUOLSEngine::isReady() const
 {
     int fl = static_cast<int>(Channel::FL);

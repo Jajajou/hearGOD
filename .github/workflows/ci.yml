@@ -31,13 +31,15 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --parallel --target hearGOD_tests
 
       - name: Test
-        run: ./build/hearGOD_tests --gtest_output=xml:test-results.xml
+        run: |
+          cd build
+          ctest --output-on-failure --output-junit ../test-results.xml
 
       - name: Upload test results
         if: always()

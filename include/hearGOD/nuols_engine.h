@@ -16,6 +16,13 @@ public:
 
     void loadHRIR(Channel ch, const float* hrirL, const float* hrirR, int hrirLength);
 
+    // Stage a new HRIR pair for click-free crossfade while the stream runs.
+    // Control thread only. Returns false if a previous swap is still fading.
+    bool loadHRIRPending(Channel ch, const float* hrirL, const float* hrirR, int hrirLength);
+
+    // True if any channel is still crossfading to a pending HRIR.
+    bool isCrossfading() const;
+
     // in:  deinterleaved input, numChannels × BUFFER_FRAMES
     // out: interleaved stereo output, 2 × BUFFER_FRAMES
     void process(const float* const* in, float* out, int numChannels);

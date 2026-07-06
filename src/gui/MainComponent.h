@@ -11,6 +11,8 @@
 #include "hearGOD/peq_parser.h"
 #include "hearGOD/nuols_engine.h"
 #include "hearGOD/dfe_compensator.h"
+#include "hearGOD/head_tracker.h"
+#include "hearGOD/tracking_controller.h"
 #include "hearGOD/types.h"
 #include <memory>
 
@@ -79,6 +81,12 @@ private:
     juce::TextButton swapLRBtn_;
     juce::Label      statusBar_;
     bool             stereoEqMode_ = false;
+
+    // Head tracking
+    std::unique_ptr<SOFALoader>         sofa_;
+    HeadTracker                         headTracker_;
+    std::unique_ptr<TrackingController> trackingCtl_;
+    juce::TextButton                    headTrackBtn_;
 
     int           lastXruns_      = 0;
     juce::String  lastSofaPath_;

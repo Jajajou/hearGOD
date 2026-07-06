@@ -66,6 +66,18 @@ void MainComponent::timerCallback()
                               + juce::String(static_cast<int>(sr)) + " Hz",
                               juce::dontSendNotification);
     }
+
+    // Head tracking: call update() + show pose or "no signal"
+    if (trackingCtl_) {
+        trackingCtl_->update();
+        if (headTracker_.isReceiving()) {
+            const auto p = headTracker_.getPose();
+            headTrackBtn_.setButtonText(
+                juce::String::formatted("Y%.0f P%.0f", p.yaw, p.pitch));
+        } else if (headTracker_.isRunning()) {
+            headTrackBtn_.setButtonText("No Signal");
+        }
+    }
 }
 
 void MainComponent::resized()
@@ -74,6 +86,7 @@ void MainComponent::resized()
 
     // Header
     auto header = area.removeFromTop(kHeaderH);
+    headTrackBtn_.setBounds(header.removeFromRight(100).reduced(8, 12));
     swapLRBtn_.setBounds(header.removeFromRight(90).reduced(8, 12));
     modeBtn_.setBounds(header.removeFromRight(110).reduced(8, 12));
     // Device combos — sit right of logo (logo+version occupies ~200px)

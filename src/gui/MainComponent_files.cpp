@@ -10,18 +10,24 @@ void MainComponent::loadSOFA(const juce::File& f)
 {
     const juce::String path = f.getFullPathName();
 
-    SOFALoader sofa;
+    auto sofaNew = std::make_unique<SOFALoader>();
     const int sr = static_cast<int>(deviceManager_.getCurrentAudioDevice()
                                     ? deviceManager_.getCurrentAudioDevice()->getCurrentSampleRate()
                                     : 48000.0);
-    if (!sofa.load(path.toStdString(), sr)) {
+    if (!sofaNew->load(path.toStdString(), sr)) {
         hrirPanel_.showError("Failed to load SOFA");
         logPanel_.log("SOFA load failed: " + f.getFileName(), LogPanel::Level::Error);
         return;
     }
+    trackingCtl_.reset();       // rebuild below — engine/sofa are being replaced
+    sofa_ = std::move(sofaNew);
+    SOFALoader& sofa = *sofa_;
 
     const AudioConfig& cfg = processor_.config();
-    auto engine = std::make_shared<NUOLSEngine>(cfg.bufferFrames, 4);
+    // Long BRIRs need enough partitions or the tail is silently truncated.
+    const int numPartitions = std::max(1,
+        (sofa.irLength() + cfg.bufferFrames - 1) / cfg.bufferFrames);
+    auto engine = std::make_shared<NUOLSEngine>(cfg.bufferFrames, numPartitions, sr);
     engine->setMasterGainDb(cfg.masterGainDb);
     engine->setLfeGainDb(cfg.lfeGainDb);
 
@@ -52,6 +58,7 @@ void MainComponent::loadSOFA(const juce::File& f)
         }
     }
 
+    trackingCtl_ = std::make_unique<TrackingController>(headTracker_, *sofa_, engine);
     processor_.setEngine(std::move(engine));
 
     const int measurements = (int)(sofa.getAllHRIRs().size() / 2);
